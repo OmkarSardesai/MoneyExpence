@@ -81,6 +81,9 @@ async function initDb() {
     if (dbUrl) {
       pool = mysql.createPool({
         uri: dbUrl,
+        connectionLimit: 10,
+        waitForConnections: true,
+        queueLimit: 0,
         ...(useSsl ? { ssl: { rejectUnauthorized: false } } : {})
       });
     } else {
@@ -91,6 +94,9 @@ async function initDb() {
         user: process.env.DB_USER || 'root',
         password: dbPassword,
         database: process.env.DB_NAME || 'expense_tracker',
+        connectionLimit: 10,
+        waitForConnections: true,
+        queueLimit: 0,
         ...(useSsl ? { ssl: { rejectUnauthorized: false } } : {})
       };
 
@@ -146,12 +152,18 @@ async function initDb() {
     }
 
     dbReady = true;
-    console.log('Database ready.');
+    console.log('Database connected and ready.');
   } catch (err) {
     dbReady = false;
-    console.error('Database connection failed:', err.message);
-    console.log('The server will still start, but database-backed features will be unavailable until MySQL is configured.');
+    console.error('Database connection attempt failed:', err.message);
   }
+}
+
+async function ensureDbReady() {
+  if (dbReady) return true;
+  console.log('Attempting to re-establish database connection...');
+  await initDb();
+  return dbReady;
 }
 
 function parseCookies(cookieHeader = '') {
@@ -264,6 +276,7 @@ function getMemorySummaryForUser(userId) {
 }
 
 async function getUserExpenses(userId) {
+  await ensureDbReady();
   if (!dbReady) {
     return getMemoryExpensesForUser(userId)
       .slice()
@@ -276,6 +289,7 @@ async function getUserExpenses(userId) {
 }
 
 async function getSummaryData(userId) {
+  await ensureDbReady();
   if (!dbReady) {
     return getMemorySummaryForUser(userId);
   }
@@ -317,8 +331,13 @@ app.post('/api/auth/register', async (req, res) => {
       return res.status(400).json({ message: 'Please fill in all fields.' });
     }
 
+    const cleanEmail = String(email).trim().toLowerCase();
+    const cleanName = String(fullName).trim();
+
+    await ensureDbReady();
+
     if (!dbReady) {
-      const existingUser = getMemoryUserByEmail(email);
+      const existingUser = getMemoryUserByEmail(cleanEmail);
       if (existingUser) {
         return res.status(409).json({ message: 'An account with this email already exists.' });
       }
@@ -326,8 +345,8 @@ app.post('/api/auth/register', async (req, res) => {
       const hashedPassword = await bcrypt.hash(password, 10);
       memoryUsers.push({
         id: memoryUserId++,
-        full_name: fullName,
-        email,
+        full_name: cleanName,
+        email: cleanEmail,
         password: hashedPassword,
         created_at: new Date().toISOString()
       });
@@ -338,7 +357,7 @@ app.post('/api/auth/register', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     await pool.query(
       'INSERT INTO users (full_name, email, password) VALUES (?, ?, ?)',
-      [fullName, email, hashedPassword]
+      [cleanName, cleanEmail, hashedPassword]
     );
 
     res.status(201).json({ message: 'Account created. Please log in.' });
@@ -346,6 +365,7 @@ app.post('/api/auth/register', async (req, res) => {
     if (err.code === 'ER_DUP_ENTRY') {
       return res.status(409).json({ message: 'An account with this email already exists.' });
     }
+    console.error('Registration error:', err);
     res.status(500).json({ message: 'Registration failed.' });
   }
 });
@@ -353,9 +373,16 @@ app.post('/api/auth/register', async (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Please enter your email and password.' });
+    }
+
+    const cleanEmail = String(email).trim().toLowerCase();
+
+    await ensureDbReady();
 
     if (!dbReady) {
-      const user = getMemoryUserByEmail(email);
+      const user = getMemoryUserByEmail(cleanEmail);
       if (!user) {
         return res.status(401).json({ message: 'Invalid credentials.' });
       }
@@ -372,7 +399,7 @@ app.post('/api/auth/login', async (req, res) => {
       return res.json({ message: 'Login successful.', user: { id: user.id, name: user.full_name, email: user.email } });
     }
 
-    const [rows] = await pool.query('SELECT * FROM users WHERE email = ?', [email]);
+    const [rows] = await pool.query('SELECT * FROM users WHERE LOWER(email) = LOWER(?)', [cleanEmail]);
     const user = rows[0];
 
     if (!user) {
@@ -390,6 +417,7 @@ app.post('/api/auth/login', async (req, res) => {
     res.cookie('authToken', token, { httpOnly: true, maxAge: 30 * 24 * 60 * 60 * 1000, sameSite: 'lax' });
     res.json({ message: 'Login successful.', user: { id: user.id, name: user.full_name, email: user.email } });
   } catch (err) {
+    console.error('Login error:', err);
     res.status(500).json({ message: 'Login failed.' });
   }
 });
