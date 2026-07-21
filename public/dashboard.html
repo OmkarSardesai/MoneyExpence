@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard | Finora</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body>
+    <div class="container dashboard">
+      <div class="topbar">
+        <div>
+          <p class="eyebrow">Expense intelligence</p>
+          <h2 style="margin: 0">Your dashboard</h2>
+        </div>
+        <div class="nav-links">
+          <span id="userName">Loading...</span>
+          <button class="btn btn-secondary" id="toggleExpensesBtn">Show Expenses</button>
+          <button class="btn btn-secondary" id="downloadExpensesBtn">Download Expenses</button>
+          <button class="btn btn-secondary" onclick="logout()">Logout</button>
+        </div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="label">Total spent</div>
+          <div class="value" id="totalSpent">₹0.00</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Top category</div>
+          <div class="value" id="topCategory">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Recent entries</div>
+          <div class="value" id="recentCount">0</div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="panel">
+          <h3>Add expense</h3>
+          <form id="expenseForm">
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Title</label>
+                <input name="title" placeholder="Groceries" required />
+              </div>
+              <div class="form-group">
+                <label>Amount</label>
+                <input name="amount" type="number" step="0.01" placeholder="75.50" required />
+              </div>
+              <div class="form-group">
+                <label>Category</label>
+                <select name="category" required>
+                  <option value="Food">Food</option>
+                  <option value="Travel">Travel</option>
+                  <option value="Shopping">Shopping</option>
+                  <option value="Bills">Bills</option>
+                  <option value="Entertainment">Entertainment</option>
+                  <option value="Health">Health</option>
+                  <option value="Education">Education</option>
+                  <option value="Housing">Housing</option>
+                  <option value="Transport">Transport</option>
+                  <option value="Utilities">Utilities</option>
+                  <option value="Savings">Savings</option>
+                  <option value="Investment">Investment</option>
+                  <option value="Salary">Salary</option>
+                  <option value="Freelance">Freelance</option>
+                  <option value="Bonus">Bonus</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Date</label>
+                <input name="expenseDate" type="date" required />
+              </div>
+              <div class="form-group">
+                <label>Transaction type</label>
+                <select name="transactionType" required>
+                  <option value="debit">Debit (Expense)</option>
+                  <option value="credit">Credit (Income)</option>
+                </select>
+              </div>
+              <div class="form-group full">
+                <label>Description</label>
+                <textarea name="description" rows="3" placeholder="Optional details"></textarea>
+              </div>
+            </div>
+            <button class="btn btn-primary" style="margin-top:12px">Save expense</button>
+          </form>
+        </div>
+        <div class="panel">
+          <h3>Spending by category</h3>
+          <div class="chart-wrap">
+            <canvas id="categoryChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="panel">
+          <h3>Monthly trend</h3>
+          <div class="chart-wrap">
+            <canvas id="trendChart"></canvas>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>Recent expenses</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Title</th><th>Category</th><th>Amount</th><th>Type</th><th></th></tr>
+              </thead>
+              <tbody id="expenseTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel" id="expenseSummaryPanel" style="display:none; margin-top:18px;">
+        <h3>Transaction overview</h3>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="label">Total debited</div>
+            <div class="value" id="totalDebit">₹0.00</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">Total credited</div>
+            <div class="value" id="totalCredit">₹0.00</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">Remaining balance</div>
+            <div class="value" id="remainingBalance">₹0.00</div>
+          </div>
+        </div>
+        <div class="table-wrap" style="margin-top:14px;">
+          <table>
+            <thead>
+              <tr><th>Title</th><th>Category</th><th>Amount</th><th>Type</th></tr>
+            </thead>
+            <tbody id="transactionTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let categoryChart;
+      let trendChart;
+      let expensePanelVisible = false;
+
+      async function loadUser() {
+        const res = await fetch('/api/auth/me');
+        if (res.ok) {
+          const data = await res.json();
+          document.getElementById('userName').textContent = data.user.full_name;
+        } else if (res.status === 401) {
+          window.location.href = '/login.html';
+        }
+      }
+
+      async function loadSummary() {
+        const res = await fetch('/api/summary');
+        if (!res.ok) return;
+        const data = await res.json();
+        document.getElementById('totalSpent').textContent = '₹' + Number(data.total).toFixed(2);
+        document.getElementById('totalDebit').textContent = '₹' + Number(data.debitTotal ?? data.debit_total ?? 0).toFixed(2);
+        document.getElementById('totalCredit').textContent = '₹' + Number(data.creditTotal ?? data.credit_total ?? 0).toFixed(2);
+        const debitTotal = Number(data.debitTotal ?? data.debit_total ?? 0);
+        const creditTotal = Number(data.creditTotal ?? data.credit_total ?? 0);
+        document.getElementById('remainingBalance').textContent = '₹' + (creditTotal - debitTotal).toFixed(2);
+        const topCategory = data.categories?.[0]?.category || '—';
+        document.getElementById('topCategory').textContent = topCategory;
+        document.getElementById('recentCount').textContent = data.recent?.length || 0;
+
+        const labels = data.categories?.map(item => item.category) || [];
+        const values = data.categories?.map(item => Number(item.total)) || [];
+        if (categoryChart) categoryChart.destroy();
+        categoryChart = new Chart(document.getElementById('categoryChart'), {
+          type: 'doughnut',
+          data: { labels, datasets: [{ data: values, backgroundColor: ['#5b8cff', '#26c6da', '#ff6b6b', '#f5b942', '#7b61ff', '#3ddc97', '#ff8a5b', '#4caf50', '#9c27b0', '#00acc1', '#f06292', '#8bc34a'] }] },
+          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+        });
+
+        const trendLabels = data.monthly?.map(item => item.month) || [];
+        const trendValues = data.monthly?.map(item => Number(item.total)) || [];
+        if (trendChart) trendChart.destroy();
+        trendChart = new Chart(document.getElementById('trendChart'), {
+          type: 'bar',
+          data: { labels: trendLabels, datasets: [{ label: 'Monthly spending', data: trendValues, backgroundColor: '#5b8cff' }] },
+          options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+        });
+      }
+
+      async function loadExpenses() {
+        const res = await fetch('/api/expenses');
+        if (!res.ok) return;
+        const data = await res.json();
+        const tbody = document.getElementById('expenseTableBody');
+        const transactionBody = document.getElementById('transactionTableBody');
+        tbody.innerHTML = '';
+        transactionBody.innerHTML = '';
+        data.expenses.forEach(exp => {
+          const transactionType = exp.transactionType || exp.transaction_type || 'debit';
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${exp.title}</td><td><span class="badge">${exp.category}</span></td><td>₹${Number(exp.amount).toFixed(2)}</td><td>${transactionType === 'credit' ? 'Credit' : 'Debit'}</td><td><button class="btn btn-secondary" onclick="deleteExpense(${exp.id})">Delete</button></td>`;
+          tbody.appendChild(tr);
+
+          const transactionRow = document.createElement('tr');
+          transactionRow.innerHTML = `<td>${exp.title}</td><td><span class="badge">${exp.category}</span></td><td>₹${Number(exp.amount).toFixed(2)}</td><td>${transactionType === 'credit' ? 'Credit' : 'Debit'}</td>`;
+          transactionBody.appendChild(transactionRow);
+        });
+      }
+
+      document.getElementById('expenseForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        const payload = Object.fromEntries(formData.entries());
+        const res = await fetch('/api/expenses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        if (res.ok) {
+          e.target.reset();
+          await loadSummary();
+          await loadExpenses();
+        } else {
+          const data = await res.json();
+          alert(data.message || 'Failed to add expense');
+        }
+      });
+
+      async function deleteExpense(id) {
+        const res = await fetch(`/api/expenses/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          await loadSummary();
+          await loadExpenses();
+        }
+      }
+
+      async function logout() {
+        await fetch('/api/auth/logout', { method: 'POST' });
+        window.location.href = '/login.html';
+      }
+
+      document.getElementById('toggleExpensesBtn').addEventListener('click', async () => {
+        const panel = document.getElementById('expenseSummaryPanel');
+        expensePanelVisible = !expensePanelVisible;
+        panel.style.display = expensePanelVisible ? 'block' : 'none';
+        if (expensePanelVisible) {
+          await loadSummary();
+          await loadExpenses();
+        }
+      });
+
+      document.getElementById('downloadExpensesBtn').addEventListener('click', async () => {
+        const res = await fetch('/api/expenses/export');
+        if (!res.ok) {
+          alert('Unable to export PDF right now.');
+          return;
+        }
+
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'expenses-report.pdf';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      });
+
+      loadUser();
+      loadSummary();
+      loadExpenses();
+    </script>
+  </body>
+</html>

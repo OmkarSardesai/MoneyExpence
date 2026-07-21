@@ -1,0 +1,11 @@
+node_modules/
+.env
+data/
+*.log
+cookies.txt
+chunks.push*
+d+
+resolve({*
+x.startsWith*
+run.exe.txt
+{
