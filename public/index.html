@@ -8,6 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/css/styles.css" />
+    <script src="/js/theme.js"></script>
   </head>
   <body>
     <header class="hero">
@@ -16,6 +17,9 @@
         <div class="nav-links">
           <a href="/login.html">Login</a>
           <a href="/register.html" class="btn btn-primary">Create Account</a>
+          <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Toggle Light/Dark Theme">
+            <span id="themeToggleIcon">🌙</span> <span id="themeToggleText">Dark</span>
+          </button>
         </div>
       </nav>
 

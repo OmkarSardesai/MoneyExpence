@@ -5,8 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Register | Finora</title>
     <link rel="stylesheet" href="/css/styles.css" />
+    <script src="/js/theme.js"></script>
   </head>
   <body>
+    <div style="position: absolute; top: 20px; right: 20px; z-index: 100;">
+      <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Toggle Light/Dark Theme">
+        <span id="themeToggleIcon">🌙</span> <span id="themeToggleText">Dark</span>
+      </button>
+    </div>
     <div class="auth-shell">
       <div class="auth-card">
         <h2>Create your account</h2>

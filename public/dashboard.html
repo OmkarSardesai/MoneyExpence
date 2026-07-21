@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Dashboard | Finora</title>
     <link rel="stylesheet" href="/css/styles.css" />
+    <script src="/js/theme.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   </head>
   <body>
@@ -19,6 +20,9 @@
           <button class="btn btn-secondary" id="toggleExpensesBtn">Show Expenses</button>
           <button class="btn btn-secondary" id="downloadExpensesBtn">Download Expenses</button>
           <button class="btn btn-secondary" onclick="logout()">Logout</button>
+          <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Toggle Light/Dark Theme">
+            <span id="themeToggleIcon">🌙</span> <span id="themeToggleText">Dark</span>
+          </button>
         </div>
       </div>
 
