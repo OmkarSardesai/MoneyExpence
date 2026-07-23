@@ -29,6 +29,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 let pool;
 let dbReady = false;
+const isDbConfigured = Boolean(process.env.DATABASE_URL || process.env.MYSQL_URL || process.env.DB_HOST);
 const memoryUsers = [];
 let memoryUserId = 1;
 const memoryExpenses = [];
@@ -79,13 +80,29 @@ async function initDb() {
 
   try {
     if (dbUrl) {
-      pool = mysql.createPool({
-        uri: dbUrl,
-        connectionLimit: 10,
-        waitForConnections: true,
-        queueLimit: 0,
-        ...(useSsl ? { ssl: { rejectUnauthorized: false } } : {})
-      });
+      try {
+        const parsedUrl = new URL(dbUrl);
+        const dbConfig = {
+          host: parsedUrl.hostname,
+          port: Number(parsedUrl.port || 3306),
+          user: parsedUrl.username,
+          password: decodeURIComponent(parsedUrl.password),
+          database: parsedUrl.pathname.replace(/^\//, '') || 'test',
+          connectionLimit: 10,
+          waitForConnections: true,
+          queueLimit: 0,
+          ...(useSsl ? { ssl: { rejectUnauthorized: false } } : {})
+        };
+        pool = mysql.createPool(dbConfig);
+      } catch (parseErr) {
+        pool = mysql.createPool({
+          uri: dbUrl,
+          connectionLimit: 10,
+          waitForConnections: true,
+          queueLimit: 0,
+          ...(useSsl ? { ssl: { rejectUnauthorized: false } } : {})
+        });
+      }
     } else {
       const dbPassword = process.env.DB_PASSWORD || 'Omkar@2005';
       const dbConfig = {
@@ -337,6 +354,10 @@ app.post('/api/auth/register', async (req, res) => {
     await ensureDbReady();
 
     if (!dbReady) {
+      if (isDbConfigured) {
+        return res.status(503).json({ message: 'Database is currently offline. Please try again later.' });
+      }
+
       const existingUser = getMemoryUserByEmail(cleanEmail);
       if (existingUser) {
         return res.status(409).json({ message: 'An account with this email already exists.' });
@@ -382,6 +403,10 @@ app.post('/api/auth/login', async (req, res) => {
     await ensureDbReady();
 
     if (!dbReady) {
+      if (isDbConfigured) {
+        return res.status(503).json({ message: 'Database is currently offline. Please try again later.' });
+      }
+
       const user = getMemoryUserByEmail(cleanEmail);
       if (!user) {
         return res.status(401).json({ message: 'Invalid credentials.' });
