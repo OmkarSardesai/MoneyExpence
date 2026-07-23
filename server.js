@@ -87,7 +87,7 @@ async function initDb() {
         ...(useSsl ? { ssl: { rejectUnauthorized: false } } : {})
       });
     } else {
-      const dbPassword = process.env.DB_PASSWORD !== undefined ? process.env.DB_PASSWORD : 'Omkar@2005';
+      const dbPassword = process.env.DB_PASSWORD || 'Omkar@2005';
       const dbConfig = {
         host: process.env.DB_HOST || 'localhost',
         port: Number(process.env.DB_PORT || 3306),
